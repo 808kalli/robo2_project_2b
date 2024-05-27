@@ -1,0 +1,19 @@
+<launch>
+
+   <!--rosparam file="$(find robo2_redundant)/yaml/parameters.yaml" command="load" /-->
+
+   <!--param name="rate" value="100"/-->
+
+   <node name="random_walker" pkg="robo2_mobile" type="random_walker" output="screen" cwd="node" >
+     <param name="rate" value="10"/>
+
+     <param name="linX" value="0.25"/>
+     <param name="angZ" value="0.5"/>
+     <param name="walking_minutes" value="3"/>
+
+     <param name="fsfw" value="0.35"/>
+     <param name="flsfw" value="0.25"/>
+     <param name="frsfw" value="0.25"/>
+   </node>
+
+</launch>
