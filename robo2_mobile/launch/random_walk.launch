@@ -17,6 +17,7 @@
    </node>
 
    <node name="kalman" pkg="robo2_mobile" type="kalman.py" output="screen" cwd="node" >
+      <param name="rate" value="10"/>
    </node>
 
 </launch>

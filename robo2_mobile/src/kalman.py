@@ -34,7 +34,7 @@ def normalize_angle(angle):
         angle += 2 * pi
     return angle
 
-class KalmanFilter:
+class KalmanFilter():
     def __init__(self, A, B, H, Q, R, x0, P0):
         self.A = A
         self.B = B
@@ -57,9 +57,10 @@ class KalmanFilter:
         self.P = self.P - K @ self.H @ self.P
         return self.x, self.P
 
-class KalmanFilterNode:
-    def __init__(self):
+class KalmanFilterNode():
+    def __init__(self, rate):
         rospy.init_node('kalman_filter_node')
+        self.pub_rate = rospy.Rate(rate)
 
         # Sensors
         self.imu = Imu()
@@ -71,7 +72,7 @@ class KalmanFilterNode:
         self.sonar_L = Range()
         self.sonar_R = Range()
 
-        # Define the system parameters
+        #System Parameters
         self.A = np.array([[1, 1], [0, 1]])
         self.B = np.array([[0.5], [1]])
         self.H = np.array([[1, 0]])
@@ -80,7 +81,7 @@ class KalmanFilterNode:
         x0 = np.array([[0], [1]])
         P0 = np.array([[1, 0], [0, 1]])
 
-        # Initialize the Kalman filter
+        #Initialize EKF
         self.kf = KalmanFilter(self.A, self.B, self.H, self.Q, self.R, x0, P0)
 
         self.u = np.array([[0]])  # Control input, assuming zero for simplicity
@@ -94,46 +95,71 @@ class KalmanFilterNode:
         #PUBLISH
         self.pub = rospy.Publisher('/filtered_pose', PoseStamped, queue_size=10)
 
+        self.publish()
+
     def vel_callback(self, msg):
         self.velocity = msg
-        #self.velocity.angular.z for angular zvelocity
-        #self.velocity.linear.x for linear x velocity
-        # self.kf.predict(self.u)
-        # x, P = self.kf.update(measurement)
-
-        # # Create PoseStamped message
-        # pose_msg = PoseStamped()
-        # pose_msg.header.stamp = rospy.Time.now()
-        # pose_msg.header.frame_id = "map"
-        # pose_msg.pose.position.x = x[0, 0]
-        # pose_msg.pose.position.y = 0
-        # pose_msg.pose.position.z = 0
-        # pose_msg.pose.orientation.x = 0
-        # pose_msg.pose.orientation.y = 0
-        # pose_msg.pose.orientation.z = 0
-        # pose_msg.pose.orientation.w = 1
-
+        # self.velocity.angular.z for angular zvelocity
+        # self.velocity.linear.x for linear x velocity
         # print("velocity: ", self.velocity.linear.x)
-
-        # self.pub.publish(pose_msg)
 
     def imu_callback(self, msg):
         # ROS callback to get the /imu
 
         self.imu = msg
         (roll, pitch, self.imu_yaw) = quaternion_to_euler(msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z)
-
         # print("yaw: ", np.rad2deg(self.imu_yaw))
 
     def sonar_front_callback(self, msg):
         # ROS callback to get the /sensor/sonar_F
 
         self.sonar_F = msg
-        print("front sonar: ", self.sonar_F.range)
+        # print("front sonar: ", self.sonar_F.range)
+
+    def publish(self):
+
+        tmp_rate = rospy.Rate(1)
+        tmp_rate.sleep()
+
+        print("Executing Extended Kalman Filter...")
+
+        rostime_now = rospy.get_rostime()
+        time_now = rostime_now.to_nsec()
+
+        while not rospy.is_shutdown():
+
+            time_prev = time_now
+            rostime_now = rospy.get_rostime()
+            time_now = rostime_now.to_nsec()
+            dt = (time_now - time_prev)/1e9
+
+            print(dt)
+
+            # #EKF 
+            # self.kf.predict(self.u)
+            # x, P = self.kf.update(measurement)
+
+            # # Create PoseStamped message
+            # pose_msg = PoseStamped()
+            # pose_msg.header.stamp = rospy.Time.now()
+            # pose_msg.header.frame_id = "map"
+            # pose_msg.pose.position.x = x[0, 0]
+            # pose_msg.pose.position.y = 0
+            # pose_msg.pose.position.z = 0
+            # pose_msg.pose.orientation.x = 0
+            # pose_msg.pose.orientation.y = 0
+            # pose_msg.pose.orientation.z = 0
+            # pose_msg.pose.orientation.w = 1
+
+            # # self.pub.publish(pose_msg)
+
+            self.pub_rate.sleep()
+
 
 if __name__ == '__main__':
     try:
-        kf_node = KalmanFilterNode()
+        rate = rospy.get_param("/kalman/rate")
+        kf_node = KalmanFilterNode(rate)
         rospy.spin()
     except rospy.ROSInterruptException:
         pass
