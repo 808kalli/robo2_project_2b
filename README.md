@@ -1,4 +1,4 @@
-# robo2_project_2a
+# robo2_project_2b
 To launch:
 
 - roslaunch mymobibot_gazebo mymobibot_world_loc.launch
