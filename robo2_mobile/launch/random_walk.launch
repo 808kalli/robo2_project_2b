@@ -16,4 +16,7 @@
      <param name="frsfw" value="0.25"/>
    </node>
 
+   <node name="kalman" pkg="robo2_mobile" type="kalman.py" output="screen" cwd="node" >
+   </node>
+
 </launch>
