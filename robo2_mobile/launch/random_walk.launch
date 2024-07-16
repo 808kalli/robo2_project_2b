@@ -4,6 +4,10 @@
 
    <!--param name="rate" value="100"/-->
 
+   <node name="kalman" pkg="robo2_mobile" type="kalman.py" output="screen" cwd="node" >
+      <param name="rate" value="10"/>
+   </node>
+
    <node name="random_walker" pkg="robo2_mobile" type="random_walker" output="screen" cwd="node" >
      <param name="rate" value="10"/>
 
@@ -14,10 +18,6 @@
      <param name="fsfw" value="0.35"/>
      <param name="flsfw" value="0.25"/>
      <param name="frsfw" value="0.25"/>
-   </node>
-
-   <node name="kalman" pkg="robo2_mobile" type="kalman.py" output="screen" cwd="node" >
-      <param name="rate" value="10"/>
    </node>
 
 </launch>

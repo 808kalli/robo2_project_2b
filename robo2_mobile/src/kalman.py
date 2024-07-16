@@ -5,6 +5,7 @@ from math import sin, cos, atan2, pi, sqrt, asin, acos
 from numpy.linalg import inv, det, norm, pinv
 import numpy as np
 import time
+from numpy.linalg import inv
 
 from sensor_msgs.msg import Range
 from sensor_msgs.msg import Imu
@@ -27,13 +28,6 @@ def quaternion_to_euler(w, x, y, z):
 
     return roll, pitch, yaw
 
-def normalize_angle(angle):
-    while angle > pi:
-        angle -= 2 * pi
-    while angle < -pi:
-        angle += 2 * pi
-    return angle
-
 class KalmanFilterNode():
     def __init__(self, rate):
         rospy.init_node('kalman_filter_node')
@@ -43,6 +37,8 @@ class KalmanFilterNode():
         self.imu = Imu()
         self.velocity = Twist()
         self.imu_yaw = 0.0 # (-pi, pi]
+        self.imuAngVelZ = 0.0
+        self.imuLinAccX = 0.0
         self.sonar_F = Range()
         self.sonar_FL = Range()
         self.sonar_FR = Range()
@@ -51,8 +47,8 @@ class KalmanFilterNode():
 
         #System Parameters
         self.x = np.array([[0.0], [0.0], [0.0]])
-        self.A = np.array([[1, 1], [0, 1]])
-        self.B = np.array([[0.5], [1]])
+        self.vel = 0.25
+
         self.H = np.array([[1, 0]])
         self.Q = np.array([[0.01, 0], [0, 0.01]])
         self.R = np.array([[0.1]])
@@ -60,6 +56,7 @@ class KalmanFilterNode():
         P0 = np.array([[1, 0], [0, 1]])
 
         self.u = np.array([[0]])  # Control input, assuming zero for simplicity
+        self.z = np.array([[0.0], [0.0], [0.0]])
 
 
         #SUBSCRIBE
@@ -84,8 +81,9 @@ class KalmanFilterNode():
 
     def imu_callback(self, msg):
         self.imu = msg
+        self.imuAngVelZ = msg.angular_velocity.z
+        self.imuLinAccX = msg.linear_acceleration.x
         (roll, pitch, self.imu_yaw) = quaternion_to_euler(msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z)
-        # print("yaw: ", np.rad2deg(self.imu_yaw))
 
     def sonar_front_callback(self, msg):
         self.sonar_F = msg
@@ -102,33 +100,62 @@ class KalmanFilterNode():
     def sonar_right_callback(self, msg):
         self.sonar_R = msg
 
-    # def predict(self):
-    #     self.x = self.A @ self.x + self.B @ u
-    #     self.P = self.A @ self.P @ self.A.T + self.Q
-    #     return self.x, self.P
+    def predict(self, dt):
 
-    # def update(self):
-    #     y = z - self.H @ self.x
-    #     S = self.H @ self.P @ self.H.T + self.R
-    #     K = self.P @ self.H.T @ np.linalg.inv(S)
-    #     self.x = self.x + K @ y
-    #     self.P = self.P - K @ self.H @ self.P
-    #     return self.x, self.P
+        self.x = self.x + np.array([[self.vel*dt*cos(self.x[2]) + 0.5*self.imuLinAccX*(dt**2)*cos(self.x[2])], [self.vel*dt*sin(self.x[2]) + 0.5*self.imuLinAccX*(dt**2)*sin(self.x[2])], [self.imuAngVelZ*dt]])
+        self.vel = self.vel + self.imuLinAccX*dt
+        if self.vel < 0.0: 
+            self.vel = 0.0
+        if self.vel > 0.25:
+            self.vel = 0.25
+        self.x[2] = (self.x[2] + pi) % (2*pi) - pi      #normalize angle
+
+        self.A = np.array([[1], [0], [-self.vel*dt*sin(self.x[2]) - 0.5*self.imuLinAccX*(dt**2)*sin(self.x[2])],
+                           [0], [1], [self.vel*dt*cos(self.x[2]) + 0.5*self.imuLinAccX*(dt**2)*cos(self.x[2])],
+                           [0], [0], [1]])
+        
+        self.Cw = np.array([[0.00001], [0], [0],
+                           [0], [0.00001], [0],
+                           [0], [0], [0.0000002]])
+        
+        self.P = self.A@self.P@self.A.T + self.Cw
+
+        return self.x, self.P
+
+    def update(self):
+
+        
+
+
+
+
+        y = z - self.H @ self.x
+        S = self.H @ self.P @ self.H.T + self.R
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+        self.x = self.x + K @ y
+        self.P = self.P - K @ self.H @ self.P
+        return self.x, self.P
 
     def publish(self):
 
         fsfw = 0.35
         flsfw = 0.25
         frsfw = 0.25
+
         phase = 1
 
-        tmp_rate = rospy.Rate(1)
-        tmp_rate.sleep()
+        dt = 0.1
+
+        dax = 0.002
+        dwz = 0.002
+
+        # estimated errors
+        dth = dwz*dt
+        dvx = dax*dt
+        dx  = 1.0/2*dax*np.cos(self.imu_yaw)*dt*dt
+        dy  = 1.0/2*dax*np.sin(self.imu_yaw)*dt*dt
 
         print("Executing Extended Kalman Filter...")
-
-        rostime_now = rospy.get_rostime()
-        time_now = rostime_now.to_nsec()
 
         while not rospy.is_shutdown():
 
@@ -138,16 +165,7 @@ class KalmanFilterNode():
             sonar_left = self.sonar_L.range
             sonar_right = self.sonar_R.range
 
-            time_prev = time_now
-            rostime_now = rospy.get_rostime()
-            time_now = rostime_now.to_nsec()
-            dt = (time_now - time_prev)/1e9
-
-            # print(dt)
-
-            self.x = self.x + np.array([[self.velocity.linear.x*dt*cos(self.x[2])], [self.velocity.linear.x*dt*sin(self.x[2])], [-self.velocity.angular.z*dt]])
-            self.x[2] = (self.x[2] + pi) % (2*pi) - pi      #normalize angle
-            print(self.x)
+            self.x = self.predict(dt)
 
             if (phase == 1):
                 if ((sonar_front < fsfw) or (sonar_front_left < flsfw) or (sonar_front_right < frsfw)):
@@ -168,7 +186,9 @@ class KalmanFilterNode():
                     if ((self.x[0] > 0) and (self.x[1] < 0)):       #Q1  
                         self.z = np.array([[2-d1], [-2+d2], [self.imu_yaw]])
                     if ((self.x[0] < 0) and (self.x[1] < 0)):       #Q4  
-                        self.z = np.array([[-2+d1], [-2+d2], [self.imu_yaw]])            
+                        self.z = np.array([[-2+d1], [-2+d2], [self.imu_yaw]])     
+
+            # print(self.z)       
 
 
             # #EKF 
