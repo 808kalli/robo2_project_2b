@@ -13,7 +13,8 @@ To record to bag files:
     - rosbag record /mymobibot/odom
     - rtopic echo -b bag_file_name.bag -p /mymobibot/odom > data_real.txt
 
-Comments for future changes:
+Comments for future changes (top = newest):
 
+- Problem in measuring d1 and d2, Confidence matrix P works fine.
 - Sonar sensors of simulation only go up to 2m distance, so if d == 2.0 we should use other sensor for update step in EKF
 

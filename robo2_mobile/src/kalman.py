@@ -60,9 +60,9 @@ class KalmanFilterNode():
                            [0.0, 1.0, 0.0],
                            [0.0, 0.0, 1.0]])
         
-        self.R = np.array([[0.0001, 0.0, 0.0],  #sensor covarriance matrix
-                           [0.0, 0.0001, 0.0],
-                           [0.0, 0.0, 0.00004]])
+        self.R = np.array([[10000, 0.0, 0.0],  #sensor covarriance matrix
+                           [0.0, 10000, 0.0],
+                           [0.0, 0.0, 400000]])
 
         self.P = np.array([[0.00001, 0, 0],     #starting P array, we are very ceratin about the starting position
                            [0, 0.00001, 0],
