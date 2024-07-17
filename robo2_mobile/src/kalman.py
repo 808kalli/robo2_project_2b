@@ -46,7 +46,7 @@ class KalmanFilterNode():
         self.sonar_R = Range()
 
         #System Parameters
-        self.x = np.array([[0.0], [0.0], [0.0]])
+        self.x = np.array([[0.0], [0.0], [2.57]])
         self.vel = 0.25
 
         #Which wall each sonar is pointing to, 0 means no wall detected (distance >= 2.0)
@@ -60,9 +60,9 @@ class KalmanFilterNode():
                            [0.0, 1.0, 0.0],
                            [0.0, 0.0, 1.0]])
         
-        self.R = np.array([[10000, 0.0, 0.0],  #sensor covarriance matrix
-                           [0.0, 10000, 0.0],
-                           [0.0, 0.0, 400000]])
+        self.R = np.array([[0.001, 0.0, 0.0],  #sensor covarriance matrix
+                           [0.0, 0.001, 0.0],
+                           [0.0, 0.0, 0.00004]])
 
         self.P = np.array([[0.00001, 0, 0],     #starting P array, we are very ceratin about the starting position
                            [0, 0.00001, 0],
@@ -129,7 +129,7 @@ class KalmanFilterNode():
         
         self.Cw = np.array([[0.00001, 0, 0],
                            [0, 0.00001, 0],
-                           [0, 0, 0.0000002]])
+                           [0, 0, 0.2]])
                 
         self.P = self.A@self.P@self.A.T + self.Cw
 
@@ -137,145 +137,167 @@ class KalmanFilterNode():
 
     def update(self, sonar_front, sonar_front_left, sonar_front_right, sonar_left, sonar_right):
 
+        dx = cos(self.x[2]) * 0.2
+        dy = sin(self.x[2]) * 0.2
+
         angle_fl = (self.x[2] + pi/4 + pi) % (2*pi) - pi
         angle_l = (self.x[2] + pi/2 + pi) % (2*pi) - pi
         angle_fr = (self.x[2] - pi/4 + pi) % (2*pi) - pi
         angle_r = (self.x[2] - pi/2 + pi) % (2*pi) - pi
         
-        top_left = pi/2 - atan2((2 - self.x[0]), (2 - self.x[1]))
-        bottom_left = pi/2 + atan2((-2 - self.x[0]), (2 - self.x[1]))
-        top_right = 2*pi - atan2((-2 - self.x[1]), (2 - self.x[0]))
-        bottom_right = pi + atan2((-2 -self.x[1]), (-2 - self.x[0]))
+        top_left = pi/2 - atan2((2 - dx - self.x[0]), (2 - dy - self.x[1]))
+        bottom_left = pi/2 - atan2((-2 - dx - self.x[0]), (2 - dy - self.x[1]))
+        top_right = 2*pi + atan2((-2 - dy - self.x[1]), (2 - dx - self.x[0]))
+        bottom_right = 2*pi + atan2((-2 - dy - self.x[1]), (-2 - dx - self.x[0]))
+
         top_left = (top_left + pi) % (2*pi) - pi                #normalize angle
         bottom_left = (bottom_left + pi) % (2*pi) - pi          #normalize angle
         top_right = (top_right + pi) % (2*pi) - pi              #normalize angle
         bottom_right = (bottom_right + pi) % (2*pi) - pi        #normalize angle
 
         #front sonar wall
-        if (self.x[2] <= top_left and self.x[2] > top_right):               #wall 1
+        if (self.x[2] <= top_left and self.x[2] > top_right):                                                           #wall 1
             self.wall_f = 1
-        elif (self.x[2] <= bottom_left and self.x[2] > top_left):           #wall 2
+        elif (self.x[2] <= bottom_left and self.x[2] > top_left):                                                       #wall 2
             self.wall_f = 2
-        elif (self.x[2] <= bottom_right and self.x[2] > bottom_left):       #wall 3
+        elif ((self.x[2] <= bottom_right and self.x[2] > -pi) or (self.x[2] > bottom_left and self.x[2] <= pi)):        #wall 3
             self.wall_f = 3
-        elif (self.x[2] <= top_right and self.x[2] > bottom_right):         #wall 4
+        elif (self.x[2] <= top_right and self.x[2] > bottom_right):                                                     #wall 4
             self.wall_f = 4
 
         #front_left sonar wall
-        if (angle_fl <= top_left and angle_fl > top_right):               #wall 1
+        if (angle_fl <= top_left and angle_fl > top_right):                                                             #wall 1
             self.wall_fl = 1
-        elif (angle_fl <= bottom_left and angle_fl > top_left):           #wall 2
+        elif (angle_fl <= bottom_left and angle_fl > top_left):                                                         #wall 2
             self.wall_fl = 2
-        elif (angle_fl <= bottom_right and angle_fl > bottom_left):       #wall 3
+        elif ((angle_fl <= bottom_right and angle_fl > -pi) or (angle_fl > bottom_left and angle_fl <= pi)):            #wall 3
             self.wall_fl = 3
-        elif (angle_fl <= top_right and angle_fl > bottom_right):         #wall 4
+        elif (angle_fl <= top_right and angle_fl > bottom_right):                                                       #wall 4
             self.wall_fl = 4
 
         #left sonar wall
-        if (angle_l <= top_left and angle_l > top_right):               #wall 1
+        if (angle_l <= top_left and angle_l > top_right):                                                               #wall 1
             self.wall_l = 1
-        elif (angle_l <= bottom_left and angle_l > top_left):           #wall 2
+        elif (angle_l <= bottom_left and angle_l > top_left):                                                           #wall 2
             self.wall_l = 2
-        elif (angle_l <= bottom_right and angle_l > bottom_left):       #wall 3
+        elif ((angle_l <= bottom_right and angle_l > -pi) or (angle_l > bottom_left and angle_l <= pi)):                #wall 3
             self.wall_l = 3
-        elif (angle_l <= top_right and angle_l > bottom_right):         #wall 4
+        elif (angle_l <= top_right and angle_l > bottom_right):                                                         #wall 4
             self.wall_l = 4
 
         #front_right sonar wall
-        if (angle_fr <= top_left and angle_fr > top_right):               #wall 1
+        if (angle_fr <= top_left and angle_fr > top_right):                                                             #wall 1
             self.wall_fr = 1
-        elif (angle_fr <= bottom_left and angle_fr > top_left):           #wall 2
+        elif (angle_fr <= bottom_left and angle_fr > top_left):                                                         #wall 2
             self.wall_fr = 2
-        elif (angle_fr <= bottom_right and angle_fr > bottom_left):       #wall 3
+        elif ((angle_fr <= bottom_right and angle_fr > -pi) or (angle_fr > bottom_left and angle_fr <= pi)):            #wall 3
             self.wall_fr = 3
-        elif (angle_fr <= top_right and angle_fr > bottom_right):         #wall 4
+        elif (angle_fr <= top_right and angle_fr > bottom_right):                                                       #wall 4
             self.wall_fr = 4
 
         #right sonar wall
-        if (angle_r <= top_left and angle_r > top_right):               #wall 1
+        if (angle_r <= top_left and angle_r > top_right):                                                               #wall 1
             self.wall_r = 1
-        elif (angle_r <= bottom_left and angle_r > top_left):           #wall 2
+        elif (angle_r <= bottom_left and angle_r > top_left):                                                           #wall 2
             self.wall_r = 2
-        elif (angle_r <= bottom_right and angle_r > bottom_left):       #wall 3
+        elif ((angle_r <= bottom_right and angle_r > -pi) or (angle_r > bottom_left and angle_r <= pi)):                #wall 3
             self.wall_r = 3
-        elif (angle_r <= top_right and angle_r > bottom_right):         #wall 4
+        elif (angle_r <= top_right and angle_r > bottom_right):                                                         #wall 4
             self.wall_r = 4
 
         
         #find position based on measurements
         #wall 1
-        if (sonar_front < 1.5 and self.wall_f == 1):
-            d1 = sonar_front*abs(cos(self.x[2]))
+        if (sonar_front < 1.9 and self.wall_f == 1):
+            d1 = (sonar_front + 0.2)*abs(cos(self.x[2]))
             self.z[0][0] = 2 - d1
-        elif (sonar_front_left < 1.5 and self.wall_fl == 1):
-            d1 = sonar_front_left*abs(cos(self.x[2]))
+        elif (sonar_front_left < 1.9 and self.wall_fl == 1):
+            d1 = (sonar_front_left + 0.14142135623)*abs(cos(angle_fl))
             self.z[0][0] = 2 - d1
-        elif (sonar_front_right < 1.5 and self.wall_fr == 1):
-            d1 = sonar_front_right*abs(cos(self.x[2]))
+        elif (sonar_front_right < 1.9 and self.wall_fr == 1):
+            d1 = (sonar_front_right + 0.14142135623)*abs(cos(angle_fr))
             self.z[0][0] = 2 - d1
-        elif (sonar_left < 1.5 and self.wall_l == 1):
-            d1 = sonar_left*abs(cos(self.x[2]))
+        elif (sonar_left < 1.9 and self.wall_l == 1):
+            d1 = (sonar_left + 0.1)*abs(cos(angle_l))
             self.z[0][0] = 2 - d1
-        elif (sonar_right < 1.5 and self.wall_r == 1):
-            d1 = sonar_right*abs(cos(self.x[2]))
+        elif (sonar_right < 1.9 and self.wall_r == 1):
+            d1 = (sonar_right + 0.1)*abs(cos(angle_r))
             self.z[0][0] = 2 - d1
         #wall 3
-        elif (sonar_front < 1.5 and self.wall_f == 3):
-            d1 = sonar_front*abs(cos(self.x[2]))
+        elif (sonar_front < 1.9 and self.wall_f == 3):
+            d1 = (sonar_front + 0.2)*abs(cos(self.x[2]))
             self.z[0][0] = -2 + d1
-        elif (sonar_front_left < 1.5 and self.wall_fl == 3):
-            d1 = sonar_front_left*abs(cos(self.x[2]))
+        elif (sonar_front_left < 1.9 and self.wall_fl == 3):
+            d1 = (sonar_front_left + 0.14142135623)*abs(cos(angle_fl))
             self.z[0][0] = -2 + d1
-        elif (sonar_front_right < 1.5 and self.wall_fr == 3):
-            d1 = sonar_front_right*abs(cos(self.x[2]))
+        elif (sonar_front_right < 1.9 and self.wall_fr == 3):
+            d1 = (sonar_front_right + 0.14142135623)*abs(cos(angle_fr))
             self.z[0][0] = -2 + d1
-        elif (sonar_left < 1.5 and self.wall_l == 3):
-            d1 = sonar_left*abs(cos(self.x[2]))
+        elif (sonar_left < 1.9 and self.wall_l == 3):
+            d1 = (sonar_left + 0.1)*abs(cos(angle_l))
             self.z[0][0] = -2 + d1
-        elif (sonar_right < 1.5 and self.wall_r == 3):
-            d1 = sonar_right*abs(cos(self.x[2]))
+        elif (sonar_right < 1.9 and self.wall_r == 3):
+            d1 = (sonar_right + 0.1)*abs(cos(angle_r))
             self.z[0][0] = -2 + d1
         else:
             d1 = None
 
         #wall 2
-        if (sonar_front < 1.5 and self.wall_f == 2):
-            d2 = sonar_front*abs(sin(self.x[2]))
+        if (sonar_front < 1.9 and self.wall_f == 2):
+            d2 = (sonar_front + 0.2)*abs(sin(self.x[2]))
             self.z[1][0] = 2 - d2
-        elif (sonar_front_left < 1.5 and self.wall_fl == 2):
-            d2 = sonar_front_left*abs(sin(self.x[2]))
+        elif (sonar_front_left < 1.9 and self.wall_fl == 2):
+            d2 = (sonar_front_left + 0.14142135623)*abs(sin(angle_fl))
             self.z[1][0] = 2 - d2
-        elif (sonar_front_right < 1.5 and self.wall_fr == 2):
-            d2 = sonar_front_right*abs(sin(self.x[2]))
+        elif (sonar_front_right < 1.9 and self.wall_fr == 2):
+            d2 = (sonar_front_right + 0.14142135623)*abs(sin(angle_fr))
             self.z[1][0] = 2 - d2
-        elif (sonar_left < 1.5 and self.wall_l == 2):
-            d2 = sonar_left*abs(sin(self.x[2]))
+        elif (sonar_left < 1.9 and self.wall_l == 2):
+            d2 = (sonar_left + 0.1)*abs(sin(angle_l))
             self.z[1][0] = 2 - d2
-        elif (sonar_right < 1.5 and self.wall_r == 2):
-            d2 = sonar_right*abs(sin(self.x[2]))
+        elif (sonar_right < 1.9 and self.wall_r == 2):
+            d2 = (sonar_right + 0.1)*abs(sin(angle_r))
             self.z[1][0] = 2 - d2
         #wall 4
-        elif (sonar_front < 1.5 and self.wall_f == 4):
-            d2 = sonar_front*abs(sin(self.x[2]))
+        elif (sonar_front < 1.9 and self.wall_f == 4):
+            d2 = (sonar_front + 0.2)*abs(sin(self.x[2]))
             self.z[1][0] = -2 + d2
-        elif (sonar_front_left < 1.5 and self.wall_fl == 4):
-            d2 = sonar_front_left*abs(sin(self.x[2]))
+        elif (sonar_front_left < 1.9 and self.wall_fl == 4):
+            d2 = (sonar_front_left + 0.14142135623)*abs(sin(angle_fl))
             self.z[1][0] = -2 + d2
-        elif (sonar_front_right < 1.5 and self.wall_fr == 4):
-            d2 = sonar_front_right*abs(sin(self.x[2]))
+        elif (sonar_front_right < 1.9 and self.wall_fr == 4):
+            d2 = (sonar_front_right + 0.14142135623)*abs(sin(angle_fr))
             self.z[1][0] = -2 + d2
-        elif (sonar_left < 1.5 and self.wall_l == 4):
-            d2 = sonar_left*abs(sin(self.x[2]))
+        elif (sonar_left < 1.9 and self.wall_l == 4):
+            d2 = (sonar_left + 0.1)*abs(sin(angle_l))
             self.z[1][0] = -2 + d2
-        elif (sonar_right < 1.5 and self.wall_r == 4):
-            d2 = sonar_right*abs(sin(self.x[2]))
+        elif (sonar_right < 1.9 and self.wall_r == 4):
+            d2 = (sonar_right + 0.1)*abs(sin(angle_r))
             self.z[1][0] = -2 + d2
         else:
             d2 = None
 
         self.z[2][0] = self.imu_yaw
 
-        #measurement model
+        #measurement model if i only have measurement for x
+        if ((d1 is not None) and (d2 is None)):
+            self.z[1][0] = self.x[1][0]
+            y = self.z - self.H @ self.x
+            S = self.H @ self.P @ self.H.T + self.R
+            K = self.P @ self.H.T @ np.linalg.inv(S)
+            self.x = self.x + K @ y
+            self.P = self.P - K @ self.H @ self.P
+
+        #measurement model if i only have measurement for y
+        if ((d1 is None) and (d2 is not None)):
+            self.z[0][0] = self.x[0][0]
+            y = self.z - self.H @ self.x
+            S = self.H @ self.P @ self.H.T + self.R
+            K = self.P @ self.H.T @ np.linalg.inv(S)
+            self.x = self.x + K @ y
+            self.P = self.P - K @ self.H @ self.P
+
+        #measurement model if i have both x and y measurements
         if ((d1 is not None) and (d2 is not None)):
             y = self.z - self.H @ self.x
             S = self.H @ self.P @ self.H.T + self.R
